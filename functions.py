@@ -280,10 +280,8 @@ async def sights_numbers(update, context):
     cursor.execute("SELECT * FROM sights WHERE city_id=?",
                    (city_id,))
     city_info = cursor.fetchall()
-    print(7)
     for number in numbers:
         if number in ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]:
-            print(77)
             sight = city_info[int(number) - 1][1]
             req = "http://static-maps.yandex.ru/1.x/?ll=" + str(city_info[int(number) - 1][3]) + ',' + str(
                 city_info[int(number) - 1][4]) + '&spn=0.02,0.02&l=map&pt=' + str(
