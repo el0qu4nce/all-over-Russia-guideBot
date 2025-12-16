@@ -33,7 +33,9 @@ def main():
             1: [MessageHandler(filters.TEXT & ~filters.COMMAND, sights_numbers)]
         },
 
-        fallbacks=[CommandHandler('stop', stop)]
+        fallbacks=[CommandHandler('stop', stop)],
+        
+        allow_reentry=True
     )
 
     application.add_handler(conv_handler_sights)
