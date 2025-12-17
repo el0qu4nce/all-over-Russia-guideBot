@@ -2,7 +2,7 @@ import sqlite3
 from telegram import ReplyKeyboardMarkup, Update
 from telegram.ext import ConversationHandler
 from telegram.ext import ContextTypes
-from config import API_KEY
+from config import API_KEY, WEATHER_API_KEY
 import requests
 import json
 from db_operators import add_sights_to_db
@@ -21,7 +21,7 @@ async def start(update, context):
         "/cafes <название_города> дает рекомендации ресторанов в указанном городе.\n\nКоманда /hotels <название_города>"
         " выдает информацию об отелях в указанном городе.\n\nКоманда /sights <название_города> позволяет узнать больше"
         " о достопримечательностях в указанном городе и об их расположении на карте.\n\nКоманда /help напомпит о том, "
-        "что я умею.\n\nДля /cafes и /hotels город можно не указывать. Тогда я запрошу твое местоположение и расскажу о тех ресторанах или отелях, которые находятся недалеко от тебя.\n\nВАЖНО! Я бот-патриот, поэтому хорошо разбираюсь только в тех городах, которые находятся в "
+        "что я умею.\n\nДля /cafes, /hotels и /weather город можно не указывать. Тогда я запрошу твое местоположение и расскажу о тех ресторанах или отелях, которые находятся недалеко от тебя, или о погоде за окном.\n\nВАЖНО! Я бот-патриот, поэтому хорошо разбираюсь только в тех городах, которые находятся в "
         "России.")
 
 
@@ -34,7 +34,7 @@ async def help(update, context):
         "/cafes <название_города> дает рекомендации ресторанов в указанном городе.\n\nКоманда /hotels <название_города>"
         " выдает информацию об отелях в указанном городе.\n\nКоманда /sights <название_города> позволяет узнать больше"
         " о достопримечательностях в указанном городе и об их расположении на карте.\n\nКоманда /help напомпит о том, "
-        "что я умею.\n\nДля /cafes и /hotels город можно не указывать. Тогда я запрошу твое местоположение и расскажу о тех ресторанах или отелях, которые находятся недалеко от тебя.\n\nВАЖНО! Я бот-патриот, поэтому хорошо разбираюсь только в тех городах, которые находятся в "
+        "что я умею.\n\nДля /cafes и /hotels и /weather город можно не указывать. Тогда я запрошу твое местоположение и расскажу о тех ресторанах или отелях, которые находятся недалеко от тебя, или о погоде за окном.\n\nВАЖНО! Я бот-патриот, поэтому хорошо разбираюсь только в тех городах, которые находятся в "
         "России.")
 
 
@@ -59,13 +59,13 @@ def find_hotels(response, update, context):
 
 # Отели в городе
 async def hotels_in_city(update, context):
-    log_user_action(update, context, "/hotels")
     try:
         search_api_server = "https://search-maps.yandex.ru/v1/"
 
         # Если задан город
         if context.args:
-            city = context.args[0]
+            log_user_action(update, context, "/hotels")
+            city = ' '.join(context.args)
             search_params = {
                 "apikey": API_KEY,
                 "text": "отель+в+" + city,
@@ -93,7 +93,7 @@ async def hotels_in_city(update, context):
 # Отели по местоположению пользователя
 async def get_location_hotels(update, context):
     location = update.message.location
-    action = f"hotel;{location.latitude};{location.longitude}"
+    action = f"/hotels;{location.latitude};{location.longitude}"
     log_user_action(update, context, action)
     search_api_server = "https://search-maps.yandex.ru/v1/"
     current_pos = (update.message.location.latitude, update.message.location.longitude)
@@ -140,12 +140,11 @@ def find_cafes(response):
 
 # Рестораны в городе
 async def restaurants(update, context):
-    log_user_action(update, context, "/cafes")
-
     try:
         search_api_server = "https://search-maps.yandex.ru/v1/"
         if context.args:
-            city = context.args[0]
+            log_user_action(update, context, "/cafes")
+            city = ' '.join(context.args)
             search_params = {
                 "apikey": API_KEY,
                 "text": "кафе+в+" + city,
@@ -175,7 +174,7 @@ async def restaurants(update, context):
 # Рестораны по местоположению пользователя
 async def get_location_cafes(update, context):
     location = update.message.location
-    action = f"cafe;{location.latitude};{location.longitude}"
+    action = f"/cafes;{location.latitude};{location.longitude}"
     log_user_action(update, context, action)
     search_api_server = "https://search-maps.yandex.ru/v1/"
     current_pos = (update.message.location.latitude, update.message.location.longitude)
@@ -198,7 +197,8 @@ async def sights_in_city(update, context):
     log_user_action(update, context, "/sights")
     try:
         search_api_server = "https://search-maps.yandex.ru/v1/"
-        city = context.args[0]
+        city = ' '.join(context.args)
+        if not(city): raise Exception
         name = update.message.from_user.username
         print(context)
         search_params = {
@@ -294,28 +294,66 @@ async def sights_numbers(update, context):
             await update.message.reply_text(
             'Достопримечательности с номером ' + number + ' не существует.')
 
-            
-
     return ConversationHandler.END  
+
+
+# Сбор информации о погоде в городе
+def find_weather_city(weather_data, city):
+    temperature = round(weather_data['main']['temp'])
+    temperature_feels = round(weather_data['main']['feels_like'])
+    t_now = f'Сейчас в городе {city} {str(temperature)}°C.'
+    t_feels = f'Ощущается как {str(temperature_feels)}°C.'
+    t_desc = f'В городе {city} сейчас {weather_data['weather'][0]['description']}.'
+    return t_now + '\n' + t_feels + '\n' + t_desc
+
+
+# Сбор информации о погоде по локации
+def find_weather_location(weather_data):
+    temperature = round(weather_data['main']['temp'])
+    temperature_feels = round(weather_data['main']['feels_like'])
+    t_now = f'Сейчас {str(temperature)}°C.'
+    t_feels = f'Ощущается как {str(temperature_feels)}°C.'
+    t_desc = f'Там, где вы находитесь, сейчас {weather_data['weather'][0]['description']}.'
+    return t_now + '\n' + t_feels + '\n' + t_desc
 
 
 # Погода в городе
 async def weather_response(update, context):
-    log_user_action(update, context, "/weather")
     try:
-        city = context.args[0]
-        url = 'https://api.openweathermap.org/data/2.5/weather?q=' + city + '&units=metric&lang=ru&appid=79d1ca96933b0328e1c7e3e7a26cb347'
-        weather_data = requests.get(url).json()
+        if context.args:
+            log_user_action(update, context, "/weather")
+            city = ' '.join(context.args)
+            url = f'https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&lang=ru&appid={WEATHER_API_KEY}'
+            weather_data = requests.get(url).json()
+            await update.message.reply_text(find_weather_city(weather_data, city))
 
-        temperature = round(weather_data['main']['temp'])
-        temperature_feels = round(weather_data['main']['feels_like'])
-        t_now = 'Сейчас в городе ' + city + ' ' + str(temperature) + ' °C.'
-        t_feels = 'Ощущается как ' + str(temperature_feels) + ' °C.'
-        t_desc = 'В городе ' + city + ' сейчас ' + weather_data['weather'][0]['description'] + '.'
-        await update.message.reply_text(t_now + '\n' + t_feels + '\n' + t_desc)
+        else:
+            reply_keyboard = [[{"request_location": True, "text": "Где я?"}]]
+            markup = ReplyKeyboardMarkup(reply_keyboard, one_time_keyboard=True)
+            await update.message.reply_text(
+                f'''Укажите свое местоположение''', reply_markup=markup)
+            return 1
     except Exception as ex:
         print(ex)
         await update.message.reply_text("Проверьте название города!")
+
+
+# Погода по местоположению пользователя
+async def get_location_weather(update, context):
+    try:
+        location = update.message.location
+        action = f"/weather;{location.latitude};{location.longitude}"
+        log_user_action(update, context, action)
+
+        current_pos = (update.message.location.latitude, update.message.location.longitude)
+        url = f'https://api.openweathermap.org/data/2.5/weather?lat={current_pos[0]}&lon={current_pos[1]}&units=metric&lang=ru&appid={WEATHER_API_KEY}'
+        weather_data = requests.get(url).json()
+        await update.message.reply_text(find_weather_location(weather_data))
+    except Exception as ex:
+        print(ex)
+        await update.message.reply_text("Прошу прощения! Не знаю, какая у тебя сейчас погода. Предлагаю выглянуть в окно)))))")
+    
+    return ConversationHandler.END
 
 
 async def stop(update, context):
