@@ -7,6 +7,10 @@ from telegram.ext import ContextTypes
 
 
 def setup_logging():
+    logger = logging.getLogger('telegram_bot')
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
     if not os.path.exists('logs'):
         os.makedirs('logs')
 
@@ -19,8 +23,9 @@ def setup_logging():
     file_handler.setFormatter(formatter)
     file_handler.setLevel(logging.INFO)
 
-    logger = logging.getLogger('telegram_bot')
-    logger.setLevel(logging.INFO)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        
     logger.addHandler(file_handler)
 
     return logger
@@ -35,7 +40,7 @@ def log_user_action(update: Update, context: ContextTypes.DEFAULT_TYPE, action: 
         user_id = user.id if user else "unknown"
         username = user.username if user and user.username else "no_username"
         try:
-            log_message = f"{username};{user_id};{action};{context.args[0]}"
+            log_message = f"{username};{user_id};{action};{' '.join(context.args)}"
         except:
             log_message = f"{username};{user_id};{action}"
         bot_logger.info(log_message)
