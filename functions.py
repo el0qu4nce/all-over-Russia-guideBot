@@ -303,7 +303,7 @@ def find_weather_city(weather_data, city):
     temperature_feels = round(weather_data['main']['feels_like'])
     t_now = f'Сейчас в городе {city} {str(temperature)}°C.'
     t_feels = f'Ощущается как {str(temperature_feels)}°C.'
-    t_desc = f'В городе {city} сейчас {weather_data['weather'][0]['description']}.'
+    t_desc = f'В городе {city} сейчас {weather_data["weather"][0]["description"]}.'
     return t_now + '\n' + t_feels + '\n' + t_desc
 
 
@@ -313,7 +313,7 @@ def find_weather_location(weather_data):
     temperature_feels = round(weather_data['main']['feels_like'])
     t_now = f'Сейчас {str(temperature)}°C.'
     t_feels = f'Ощущается как {str(temperature_feels)}°C.'
-    t_desc = f'Там, где вы находитесь, сейчас {weather_data['weather'][0]['description']}.'
+    t_desc = f'Там, где вы находитесь, сейчас {weather_data["weather"][0]["description"]}.'
     return t_now + '\n' + t_feels + '\n' + t_desc
 
 
